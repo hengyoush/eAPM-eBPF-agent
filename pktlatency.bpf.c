@@ -43,6 +43,7 @@ const struct conn_evt_t *conn_evt_t_unused __attribute__((unused));
 const enum conn_type_t *conn_type_t_unused __attribute__((unused));
 const enum endpoint_role_t *endpoint_role_unused  __attribute__((unused));
 const enum traffic_direction_t *traffic_direction_t_unused __attribute__((unused));
+const enum traffic_protocol_t *traffic_protocol_t_unused __attribute__((unused));
 
 static __always_inline bool skb_l2_check(u16 header)
 {
@@ -296,10 +297,22 @@ static void __always_inline parse_sk_l3l4(struct sock_key *key, struct iphdr *ip
 	key->dport = dport;
 	key->family = 0;
 }
+
+static __inline bool should_trace_conn(struct conn_info_t *conn_info) {
+	// conn_info->laddr.in4.sin_port
+	// bpf_printk("conn_info->laddr.in4.sin_port: %d, %d", 
+	// 	conn_info->laddr.in4.sin_port,conn_info->raddr.in4.sin_port);
+	// if (conn_info->laddr.in4.sin_port == target_port || 
+	// 	conn_info->raddr.in4.sin_port == target_port) {
+	// 		return true;
+	// }
+
+	return conn_info->protocol != kProtocolUnknown;
+}
 static bool __always_inline should_trace_sock_key(struct sock_key *key) {
 	struct conn_id_s_t *conn_id_s = bpf_map_lookup_elem(&sock_key_conn_id_map, key);
 	if (conn_id_s == NULL) {
-		// 握手包
+		// 可能还在握手
 		return true;
 	}
 	struct conn_info_t *conn_info = bpf_map_lookup_elem(&conn_info_map, &conn_id_s->tgid_fd);
@@ -307,7 +320,7 @@ static bool __always_inline should_trace_sock_key(struct sock_key *key) {
 		// why?
 		return true;
 	}
-	return conn_info->protocol == kProtocolUnknown;
+	return should_trace_conn(conn_info);
 }
 static __always_inline int parse_skb(struct sk_buff *skb, char* func_name, bool sk_not_ready, enum step_t step) {
 	struct sock* sk = _(skb->sk);
@@ -442,17 +455,17 @@ int xdp_proxy(struct xdp_md *ctx){
 	key.dport = bpf_ntohs(th->dest);
 	key.family = 0;
 	int  *found = bpf_map_lookup_elem(&sock_xmit_map, &key);
-	if (found == NULL && (key.dport != target_port && key.sport != target_port)) {
+	if (found == NULL || !should_trace_sock_key(&key)) {
 		// bpf_printk("xdp key.dport != target_port, %u,%u", key.dport, key.sport);
 		return XDP_PASS;
 	}
 	u32 inital_seq;
-	if (found == NULL && (key.dport == target_port || key.sport == target_port)) {
+	if (found == NULL) {
 		inital_seq = bpf_ntohl(th->seq);
 		bpf_map_update_elem(&sock_xmit_map, &key,&inital_seq, BPF_NOEXIST);
-		bpf_printk("xdp not found!, seq: %u", inital_seq);
-		bpf_printk("xdp, not found!, sip: %u, dip:%u", bpf_ntohl(key.sip), bpf_ntohl(key.dip));
-		bpf_printk("xdp, not found!, sport:%d, dport:%d, family:%d", key.sport, key.dport,key.family);
+		// bpf_printk("xdp not found!, seq: %u", inital_seq);
+		// bpf_printk("xdp, not found!, sip: %u, dip:%u", bpf_ntohl(key.sip), bpf_ntohl(key.dip));
+		// bpf_printk("xdp, not found!, sport:%d, dport:%d, family:%d", key.sport, key.dport,key.family);
 	} else {
 		bpf_probe_read_kernel(&inital_seq, sizeof(inital_seq), found);
 		bpf_printk("xdp found!, seq: %u", inital_seq);
@@ -705,6 +718,9 @@ int BPF_KPROBE(skb_copy_datagram_iter, struct sk_buff *skb, int offset, struct i
 		// bpf_printk("skb_copy_datagram_iter, not found!, sport:%d, dport:%d,family:%d", key.sport, key.dport, key.family);
 		return BPF_OK;
 	}
+	if (!should_trace_sock_key(&key)) {
+		return BPF_OK;
+	}
 	u32 inital_seq;
 	bpf_probe_read_kernel(&inital_seq, sizeof(inital_seq), found);
 	// bpf_printk("skb_copy_datagram_iter, found!, sip: %u, dip:%u", bpf_ntohl(key.sip), bpf_ntohl(key.dip));
@@ -787,7 +803,7 @@ int BPF_KPROBE(ip_queue_xmit, struct sock *sk, struct sk_buff *skb)
 	parse_sock_key(skb, &key);
 	// 如果map里有才进行后面的步骤
 	int  *found = bpf_map_lookup_elem(&sock_xmit_map, &key);
-	if (found == NULL && (key.dport != target_port && key.sport != target_port)) {
+	if (found == NULL || !should_trace_sock_key(&key)) {
 		// bpf_printk("kp, lip: %d, dip:%d", key.sip, key.dip);
 		// bpf_printk("ip_queue_xmit, lport: %d, dport:%d", key.sport, key.dport);
 		return 0;
@@ -797,10 +813,10 @@ int BPF_KPROBE(ip_queue_xmit, struct sock *sk, struct sk_buff *skb)
 		struct tcphdr* tcp = (struct tcphdr*)_C(skb, data);
 		inital_seq = bpf_ntohl(_(tcp->seq)); 
 		bpf_map_update_elem(&sock_xmit_map, &key,&inital_seq, BPF_NOEXIST);
-		bpf_printk("not found!, seq: %u", inital_seq);
+		// bpf_printk("not found!, seq: %u", inital_seq);
 	} else {
 		bpf_probe_read_kernel(&inital_seq, sizeof(inital_seq), found);
-		bpf_printk("found!, seq: %u", inital_seq);
+		// bpf_printk("found!, seq: %u", inital_seq);
 	}
 
 	struct tcphdr* tcp = (struct tcphdr*)_C(skb, data);
@@ -884,17 +900,6 @@ static __inline void init_conn_info(uint32_t tgid, int32_t fd, struct conn_info_
 
 static __inline uint64_t gen_tgid_fd(uint32_t tgid, int fd) {
   return ((uint64_t)tgid << 32) | (uint32_t)fd;
-}
-static __inline bool should_trace_conn(struct conn_info_t *conn_info) {
-	// conn_info->laddr.in4.sin_port
-	// bpf_printk("conn_info->laddr.in4.sin_port: %d, %d", 
-	// 	conn_info->laddr.in4.sin_port,conn_info->raddr.in4.sin_port);
-	// if (conn_info->laddr.in4.sin_port == target_port || 
-	// 	conn_info->raddr.in4.sin_port == target_port) {
-	// 		return true;
-	// }
-
-	return conn_info->protocol != kProtocolUnknown;
 }
 static __always_inline struct tcp_sock *get_socket_from_fd(int fd_num) {
 	struct task_struct *task = (struct task_struct *)bpf_get_current_task();
@@ -1053,8 +1058,14 @@ static __always_inline void process_syscall_data(struct pt_regs* ctx, struct dat
 	}
 	if (conn_info->protocol == kProtocolUnset) {
 		struct protocol_message_t protocol_message = infer_protocol(args->buf, bytes_count, conn_info);
-		conn_info->protocol = protocol_message.protocol;
+		// conn_info->protocol = protocol_message.protocol;
 		bpf_printk("[protocol infer]: %d", conn_info->protocol);
+		report_conn_evt(conn_info, kProtocolInfer);
+		if (conn_info->raddr.in4.sin_port == 6379 && bytes_count > 16) {
+			char buf[1] = {};
+			bpf_probe_read_user(buf, 1, args->buf);
+			bpf_printk("test, redis first byte is: %c", buf[0]);
+		}
 	}
 	if (!should_trace_conn(conn_info)) {
 		return;

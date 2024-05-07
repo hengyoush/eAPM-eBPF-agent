@@ -95,6 +95,7 @@ enum traffic_direction_t {
 enum conn_type_t {
   kConnect,
   kClose,
+  kProtocolInfer,
 };
 
 struct sock_key {
@@ -240,10 +241,13 @@ struct conn_evt_t {
 	uint64_t ts;
 };
 
-static __always_inline int is_redis_protocol(const char *buf, size_t count) {
+static __always_inline int is_redis_protocol(const char *old_buf, size_t count) {
   if (count < 3) {
     return false;
   }
+  
+  char buf[1] = {};
+  bpf_probe_read_user(buf, 1, old_buf);
   const char first_byte = buf[0];
   if (  // Simple strings start with +
       first_byte != '+' &&
@@ -257,12 +261,15 @@ static __always_inline int is_redis_protocol(const char *buf, size_t count) {
       first_byte != '*') {
     return false;
   }
+  return true;
 }
 
-static __always_inline int is_http_protocol(const char *buf, size_t count) {
+static __always_inline int is_http_protocol(const char *old_buf, size_t count) {
   if (count < 16) {
     return 0;
   }
+  char buf[4] = {};
+  bpf_probe_read_user(buf, 4, old_buf);
   if (buf[0] == 'G' && buf[1] == 'E' && buf[2] == 'T') {
     return 1;
   }
@@ -284,6 +291,7 @@ static __always_inline struct protocol_message_t infer_protocol(const char *buf,
   } else if (is_redis_protocol(buf, count)) {
     protocol_message.protocol = kProtocolRedis;
   }
+  conn_info->protocol = protocol_message.protocol;
 }
 
 #endif		
