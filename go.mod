@@ -20,7 +20,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0
 	github.com/jefurry/logrus v2.0.6+incompatible
 	github.com/lucasb-eyer/go-colorful v1.2.0
-	github.com/mandiant/GoReSym v1.7.2-0.20240819162932-534ca84b42d5
+	github.com/mandiant/GoReSym v1.7.2-0.20260914170503-722897e0a80d
 	github.com/miekg/dns v1.1.64
 	github.com/muesli/termenv v0.15.2
 	github.com/sevlyar/go-daemon v0.1.6

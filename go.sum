@@ -177,6 +177,8 @@ github.com/magiconair/properties v1.8.7 h1:IeQXZAiQcpL9mgcAe1Nu6cX9LLw6ExEHKjN0V
 github.com/magiconair/properties v1.8.7/go.mod h1:Dhd985XPs7jluiymwWYZ0G4Z61jb3vdS329zhj2hYo0=
 github.com/mandiant/GoReSym v1.7.2-0.20240819162932-534ca84b42d5 h1:OyxMVWG+V2gzLNCXfLGyze3zN9Zbi2CKtAlCWtS0L64=
 github.com/mandiant/GoReSym v1.7.2-0.20240819162932-534ca84b42d5/go.mod h1:C9Cyl7dQTqNzm5KyrZ78bS54bzwMd1fu3cWDWULCzLc=
+github.com/mandiant/GoReSym v1.7.2-0.20260914170503-722897e0a80d h1:D5EtU6GHyxsKJ//LsNWQ76kNG/8Uv49Z+6MWy8AhVdk=
+github.com/mandiant/GoReSym v1.7.2-0.20260914170503-722897e0a80d/go.mod h1:C9Cyl7dQTqNzm5KyrZ78bS54bzwMd1fu3cWDWULCzLc=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/mattn/go-localereader v0.0.1 h1:ygSAOl7ZXTx4RdPYinUpg6W99U8jWvWi9Ye2JC/oIi4=
